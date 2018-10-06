@@ -1,18 +1,117 @@
 #include "edid.h"
 
+// Credit: http://ofekshilon.com/2014/06/19/reading-specific-monitor-dimensions/
 
-BOOL CALLBACK MonitorFoundCallback( _In_ HMONITOR hMonitor, _In_ HDC hdcMonitor, _In_ LPRECT lprcMonitor, _In_ LPARAM dwData ) {
+#define NAME_SIZE 128
 
-    // Use this function to identify the monitor of interest: MONITORINFO contains the Monitor RECT.
+const GUID GUID_CLASS_MONITOR = { 0x4d36e96e, 0xe325, 0x11ce, 0xbf, 0xc1, 0x08, 0x00, 0x2b, 0xe1, 0x03, 0x18 };
+
+// Callback called when EnumDisplayMonitors() finds a monitor to process
+BOOL CALLBACK MonitorFoundCallback(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM pData);
+
+// Given a handle to a monitor, get a DISPLAY_DEVICE struct (which contains the DeviceID)
+BOOL DisplayDeviceFromHMonitor(HMONITOR hMonitor, DISPLAY_DEVICE &ddMonOut);
+
+// Take a device instance ID that points to a monitor and write its dimensions to arguments 2 and 3
+bool GetSizeForDevID(const CString &TargetDevID, short &WidthMm, short &HeightMm);
+
+// Parse EDID from given registry key to get width and height parameters, assumes hEDIDRegKey is valid
+bool GetMonitorSizeFromEDID(const HKEY hEDIDRegKey, short &WidthMm, short &HeightMm);
+
+DisplayEnquiryCode DisplayFromHMonitor(HMONITOR hMonitor, DisplayInfo & info);
+
+// should probably use STL:
+// Get the second slash block, used to match DeviceIDs to instances, example:
+// DeviceID: MONITOR\GSM4B85\{4d36e96e-e325-11ce-bfc1-08002be10318}\0011
+// Instance: DISPLAY\GSM4B85\5&273756F2&0&UID1048833
+CString Get2ndSlashBlock(const CString &sIn)
+{
+    int FirstSlash = sIn.Find(_T('\\'));
+    CString sOut = sIn.Right(sIn.GetLength() - FirstSlash - 1);
+    FirstSlash = sOut.Find(_T('\\'));
+    sOut = sOut.Left(FirstSlash);
+    return sOut;
+}
+
+struct WinEphemeralResult
+{
+    DisplayEnquiryCode code;
+    DisplayGroup * pGroup;
+    //DisplayInfo * pInfo;
+    RECT rcCombined;
+
+    WinEphemeralResult()
+        : code(DISPLAY_ENQUIRY_OK)
+        , pGroup(0)
+        //, pInfo(0)
+    {
+        SetRectEmpty(&rcCombined);
+    }
+
+    WinEphemeralResult(DisplayGroup & group)
+        : code(DISPLAY_ENQUIRY_OK)
+        , pGroup(&group)
+        //, pInfo(0)
+    {
+        SetRectEmpty(&rcCombined);
+    }
+};
+
+DisplayEnquiryCode get_all_displays(DisplayGroup & group)
+{
+    // with thanks to https://stackoverflow.com/a/18112853
+    WinEphemeralResult result(group);    
+    EnumDisplayMonitors(0, 0, MonitorFoundCallback, (LPARAM)&result);
+    group.virtual_px = DisplayRect(result.rcCombined);
+    return result.code;
+}
+
+DisplayEnquiryCode get_display_for_hwnd(HWND hwnd, DisplayInfo & info)
+{
+    WinEphemeralResult result;
+    //result.pInfo = &info;
+    HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    if (NULL == hMonitor)
+    {
+        return DISPLAY_ENQUIRY_NO_MATCH;
+    }
+    return DisplayFromHMonitor(hMonitor, info);
+    //return display_from_hmonitor(hMon);
+}
+
+BOOL CALLBACK MonitorFoundCallback(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM pData)
+{
+    WinEphemeralResult *pResult = reinterpret_cast<WinEphemeralResult*>(pData);
+
+    // Update the full virtual screen space
+    UnionRect(&pResult->rcCombined, &pResult->rcCombined, lprcMonitor);
+
+    DisplayInfo display;
+    DisplayEnquiryCode code = DisplayFromHMonitor(hMonitor, display);
+    if (code != DISPLAY_ENQUIRY_OK)
+    {
+        pResult->code = code;
+        return TRUE; // or should this be false?
+    }
+
+    if (pResult->pGroup)
+    {
+        // caller provided a group, so append this new display
+        display.seq = pResult->pGroup->displays.size();
+        pResult->pGroup->displays.push_back(display);
+    }
+    return TRUE;
+}
+
+DisplayEnquiryCode DisplayFromHMonitor(HMONITOR hMonitor, DisplayInfo & info)
+{
     MONITORINFOEX mi;
     mi.cbSize = sizeof( MONITORINFOEX );
-    
     GetMonitorInfo( hMonitor, &mi );
 
     DISPLAY_DEVICE ddMon;
-
     if (DisplayDeviceFromHMonitor(hMonitor, ddMon) == FALSE) {
-        return 1;
+        return DISPLAY_ENQUIRY_DEVICE_NOT_FOUND;
     }
 
     CString DeviceID;
@@ -21,27 +120,28 @@ BOOL CALLBACK MonitorFoundCallback( _In_ HMONITOR hMonitor, _In_ HDC hdcMonitor,
 
     short WidthMm = -1, HeightMm = -1;
     bool bFoundDevice = GetSizeForDevID(DeviceID, WidthMm, HeightMm);
-    if (bFoundDevice) {
-        CT2A deviceName(mi.szDevice);
-        CT2A deviceId(ddMon.DeviceID);
-        CT2A deviceStr(ddMon.DeviceString);
+    if (!bFoundDevice)
+    {
+        return DISPLAY_ENQUIRY_SIZE_NOT_FOUND;
+    }
 
-        printf("Found monitor:\n");
-        printf("  name: [%s]\n", deviceName.m_psz);
-        printf("  device name: [%s]\n", deviceId.m_psz);
-        printf("  device str: [%s]\n", deviceStr.m_psz);
-        printf("  status: %s\n", (mi.dwFlags & MONITORINFOF_PRIMARY) > 0 ? "Primary" : "Not-primary");
-        printf("  is-active: %s\n", (ddMon.StateFlags & DISPLAY_DEVICE_ACTIVE) > 0 ? "true" : "false");
-        printf("  rect (LTRB): %d %d %d %d\n", mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom);
-        printf("  work (LTRB): %d %d %d %d\n", mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom);
-        printf("  physical width x height: %dmm  x  %dmm\n", WidthMm, HeightMm);
-        printf("  %1.1f px per mm\n", (mi.rcMonitor.right - mi.rcMonitor.left) / (float)WidthMm);
-        printf("  %1.3f mm per px\n", WidthMm / (float)(mi.rcMonitor.right - mi.rcMonitor.left));
-    }
-    else {
-        printf("Failed to find monitor\n");
-    }
-    return TRUE;
+    CT2A deviceName(mi.szDevice);
+    CT2A deviceId(ddMon.DeviceID);
+    CT2A deviceStr(ddMon.DeviceString);
+
+    info.seq = 0; // fill in later
+    
+    info.name = mi.szDevice; // TODO: is this ok or need conversion or CT2A?
+    info.device_name = ddMon.DeviceID;
+    info.device_str = ddMon.DeviceString;
+    info.is_primary = (mi.dwFlags & MONITORINFOF_PRIMARY) > 0 ? true : false;
+    info.is_active = (ddMon.StateFlags & DISPLAY_DEVICE_ACTIVE) > 0 ? true : false;
+    info.full_px = DisplayRect(mi.rcMonitor);
+    info.work_px = DisplayRect(mi.rcWork);
+    info.physical_mm = DisplaySize(WidthMm, HeightMm);
+    info.px_per_mm = (mi.rcMonitor.right - mi.rcMonitor.left) / (double)WidthMm;
+    info.mm_per_px = WidthMm / (float)(mi.rcMonitor.right - mi.rcMonitor.left);
+    return DISPLAY_ENQUIRY_OK;
 }
 
 BOOL DisplayDeviceFromHMonitor( HMONITOR hMonitor, DISPLAY_DEVICE &ddMonOut ) {
@@ -87,13 +187,6 @@ BOOL DisplayDeviceFromHMonitor( HMONITOR hMonitor, DISPLAY_DEVICE &ddMonOut ) {
     return FALSE;
 }
 
-CString Get2ndSlashBlock( const CString &sIn ) {
-    int FirstSlash = sIn.Find( _T( '\\' ) );
-    CString sOut = sIn.Right( sIn.GetLength() - FirstSlash - 1 );
-    FirstSlash = sOut.Find( _T( '\\' ) );
-    sOut = sOut.Left( FirstSlash );
-    return sOut;
-}
 
 bool GetSizeForDevID( const CString &TargetDevID, short &WidthMm, short &HeightMm ) {
     HDEVINFO devInfo = SetupDiGetClassDevsEx(
