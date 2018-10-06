@@ -18,5 +18,13 @@
     <ClCompile Include="win\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="shared\edid.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="shared\edid.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
