@@ -34,7 +34,7 @@ struct GlobalState
     void invalidate(HWND hwnd)
     {
         need_refresh = true;
-        InvalidateRect(hwnd, NULL, TRUE);
+        InvalidateRect(hwnd, NULL, FALSE);
     }
 
     void checkMonitorChange(HWND hwnd)
@@ -236,7 +236,7 @@ LRESULT HandlePaint(HWND hwnd)
     CRect win_rect = scale_rect(scale, left, top, central.win_pos, central.displays.virtual_px);
     FillRect(hdc, &win_rect, b);
     //Rectangle(hdc, win_rect.left, win_rect.top, win_rect.right, win_rect.bottom);
-    message.Format(_T("This window\nW: %d\nH: %d"), win_rect.Width(), win_rect.Height());
+    message.Format(_T("This window\nW: %d\nH: %d"), central.win_pos.width(), central.win_pos.height());
     DrawText(hdc, message.GetString(), message.GetLength(), &win_rect, DT_LEFT | DT_TOP);
 
     DeleteObject(b);
@@ -281,6 +281,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         central.invalidate(hwnd);
         break; // fall through
     case WM_WINDOWPOSCHANGED: 
+        HandleWinMoved(hwnd); // flcker?
         central.checkMonitorChange(hwnd);
         //return 0;
         break; // fall through

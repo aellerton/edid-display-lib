@@ -14,7 +14,7 @@ int _tmain(int argc, _TCHAR *argv[])
         exit(code);
     }
 
-    printf("Found %d display device%s\n", all_displays.displays.size(), all_displays.displays.size() == 1 ? "" : "s");
+    printf("Found %d display device%s\n", (int)all_displays.displays.size(), all_displays.displays.size() == 1 ? "" : "s");
 
     printf("\nVirtual desktop size:\n");
     printf("  LTRB: %d %d %d %d\n",
