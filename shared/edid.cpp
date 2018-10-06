@@ -97,7 +97,7 @@ BOOL CALLBACK MonitorFoundCallback(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lpr
     if (pResult->pGroup)
     {
         // caller provided a group, so append this new display
-        display.seq = pResult->pGroup->displays.size();
+        display.seq = static_cast<short>(pResult->pGroup->displays.size());
         pResult->pGroup->displays.push_back(display);
     }
     return TRUE;
@@ -131,9 +131,9 @@ DisplayEnquiryCode DisplayFromHMonitor(HMONITOR hMonitor, DisplayInfo & info)
 
     info.seq = 0; // fill in later
     
-    info.name = mi.szDevice; // TODO: is this ok or need conversion or CT2A?
-    info.device_name = ddMon.DeviceID;
-    info.device_str = ddMon.DeviceString;
+    info.name = deviceName; // TODO: is this ok or need conversion or CT2A?
+    info.device_name = deviceId;
+    info.device_str = deviceStr;
     info.is_primary = (mi.dwFlags & MONITORINFOF_PRIMARY) > 0 ? true : false;
     info.is_active = (ddMon.StateFlags & DISPLAY_DEVICE_ACTIVE) > 0 ? true : false;
     info.full_px = DisplayRect(mi.rcMonitor);
