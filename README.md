@@ -3,6 +3,8 @@
 A small library to detect all monitors including physical sizes,
 for now Windows only.
 
+![screenshot](./screenshot.png)
+
 Origin:
 
 - Based on https://github.com/aellerton/EDID-Parser-Windows
