@@ -59,6 +59,11 @@ struct DisplayRect
     {
         return bottom - top;
     }
+
+    void clear()
+    {
+        left = top = right = bottom = 0;
+    }
 };
 
 struct DisplaySize
@@ -113,6 +118,11 @@ struct DisplayGroup
     DisplayRect virtual_px;
 
     DisplayGroup() {}
+    void clear()
+    {
+        displays.clear();
+        virtual_px.clear();
+    }
 };
 
 DisplayEnquiryCode get_all_displays(DisplayGroup & group);

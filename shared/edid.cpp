@@ -60,6 +60,7 @@ struct WinEphemeralResult
 DisplayEnquiryCode get_all_displays(DisplayGroup & group)
 {
     // with thanks to https://stackoverflow.com/a/18112853
+    group.clear();
     WinEphemeralResult result(group);    
     EnumDisplayMonitors(0, 0, MonitorFoundCallback, (LPARAM)&result);
     group.virtual_px = DisplayRect(result.rcCombined);
@@ -70,7 +71,7 @@ DisplayEnquiryCode get_display_for_hwnd(HWND hwnd, DisplayInfo & info)
 {
     WinEphemeralResult result;
     //result.pInfo = &info;
-    HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
     if (NULL == hMonitor)
     {
         return DISPLAY_ENQUIRY_NO_MATCH;
