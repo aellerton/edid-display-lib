@@ -1,24 +1,22 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
-#include <iostream>
+//#include <iostream>
+#include "shared/edid.h"
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-	PWSTR pCmdLine, int nCmdShow);
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
-	LPARAM lParam);
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 int wmain()
 {
-	wWinMain(nullptr, nullptr, nullptr, 0);
+    wWinMain(nullptr, nullptr, nullptr, 0);
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-	PWSTR pCmdLine, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
 	WNDCLASSEX wc = { 0 };
 	wc.hInstance = hInstance;
-	wc.lpszClassName = L"MainWindow";
+	wc.lpszClassName = L"DisplayInfoMain";
 	wc.cbSize = sizeof(WNDCLASSEX);
 	wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
 	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
@@ -27,15 +25,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	auto regRes = RegisterClassEx(&wc);
 	if (!regRes)
 	{
-		std::cerr << "window registration failed" << std::endl;
+		//std::cerr << "window registration failed" << std::endl;
 		return regRes;
 	}
-	auto hwnd = CreateWindowEx(0, wc.lpszClassName, L"Hello",
+	auto hwnd = CreateWindowEx(0, wc.lpszClassName, L"Display Info",
 		WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
 		CW_USEDEFAULT, nullptr, nullptr, hInstance, nullptr);
 	if (hwnd == nullptr)
 	{
-		std::cerr << "window couldn't be created" << std::endl;
+		//std::cerr << "window couldn't be created" << std::endl;
 		return -1;
 	}
 
@@ -61,6 +59,8 @@ LRESULT HandlePaint(HWND hwnd)
 	PAINTSTRUCT ps;
 	auto hdc = BeginPaint(hwnd, &ps);
 	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW));
+    CString message = L"Display info";
+    int height = DrawText(hdc, message.GetString(), message.GetLength(), &ps.rcPaint, DT_LEFT | DT_TOP);
 	EndPaint(hwnd, &ps);
 	return 0;
 }
