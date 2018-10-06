@@ -1,7 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
-//#include <iostream>
 #include <atltypes.h>
 #include "shared/edid.h"
 
@@ -14,12 +13,13 @@ struct GlobalState
     DisplayInfo this_display;
     bool need_refresh;
     int refresh_count;
-    HMONITOR mostRecentMonitor;
+    HMONITOR most_recent_hmon;
+    DisplayRect win_pos;
 
     GlobalState()
         : need_refresh(true)
         , refresh_count(0)
-        , mostRecentMonitor(NULL)
+        , most_recent_hmon(NULL)
     {}
 
     DisplayEnquiryCode refresh(HWND hwnd)
@@ -40,13 +40,28 @@ struct GlobalState
     void checkMonitorChange(HWND hwnd)
     {
         HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
-        if (hMonitor != mostRecentMonitor)
+        if (hMonitor != most_recent_hmon)
         {
-            mostRecentMonitor = hMonitor;
+            most_recent_hmon = hMonitor;
             invalidate(hwnd);
         }
     }
 };
+
+CRect scale_rect(double scale, int left, int top, const DisplayRect & src, const DisplayRect & full)
+{
+    CPoint pt(
+        left + static_cast<int>((src.left - full.left) * scale),
+        top + static_cast<int>((src.top - full.top) * scale)
+    );
+    //pt.Offset(mini_display_top_left);
+    CSize sz(
+        static_cast<int>(src.width()*scale),
+        static_cast<int>(src.height()*scale)
+    );
+
+    return CRect(pt, sz);
+}
 
 GlobalState central;
 
@@ -171,22 +186,11 @@ LRESULT HandlePaint(HWND hwnd)
     int available_width = ps.rcPaint.right - offset - left;
     double scale = available_width / (double)central.displays.virtual_px.width();
 
-    CPoint mini_display_top_left(left, top);
+    //CPoint mini_display_top_left(left, top);
 
     for (DisplayInfo & d : central.displays.displays)
     {
-        //CRect mon_rect(left, top, 
-        //    static_cast<int>(left + d.full_px.width()*scale),
-        //    static_cast<int>(top + d.full_px.height()*scale)
-        //    );
-        //central.displays.virtual_px.left*scale
-        //central.displays.virtual_px.top*scale
-
-        //CPoint pt(
-        //    static_cast<int>(left + d.full_px.left*scale + central.displays.virtual_px.left*scale),
-        //    static_cast<int>(top + d.full_px.top*scale + central.displays.virtual_px.top*scale)
-        //);
-        double xxx = (d.full_px.left - central.displays.virtual_px.left) * scale;
+        /*
         CPoint pt(
             static_cast<int>((d.full_px.left - central.displays.virtual_px.left) * scale),
             static_cast<int>((d.full_px.top - central.displays.virtual_px.top) * scale)
@@ -197,7 +201,8 @@ LRESULT HandlePaint(HWND hwnd)
             static_cast<int>(d.full_px.height()*scale)
         );
 
-        CRect mon_rect(pt, sz);
+        CRect mon_rect(pt, sz);*/
+        CRect mon_rect = scale_rect(scale, left, top, d.full_px, central.displays.virtual_px);
         Rectangle(hdc, mon_rect.left, mon_rect.top, mon_rect.right, mon_rect.bottom);
         message.Format(_T(
                 "Display %d\n"
@@ -220,18 +225,44 @@ LRESULT HandlePaint(HWND hwnd)
             (d.is_active ? _T("Active") : _T("Inactive")),
             d.px_per_mm
         );
-        height = DrawText(hdc, message.GetString(), message.GetLength(), &mon_rect, DT_LEFT | DT_TOP);
-        left = mon_rect.right;
+        DrawText(hdc, message.GetString(), message.GetLength(), &mon_rect, DT_LEFT | DT_TOP);
+        //left = mon_rect.right;
     }
+    //SetDCBrushColor(hdc, RGB(150, 150, 250));
+    HBRUSH b = CreateSolidBrush(RGB(150, 150, 250));
+    //
+    //CBrush b(CreateSolidBrush(COLOREF()
+    //SelectObject(ps.hdc, GetStockObject(GRAY_BRUSH));
+    CRect win_rect = scale_rect(scale, left, top, central.win_pos, central.displays.virtual_px);
+    FillRect(hdc, &win_rect, b);
+    //Rectangle(hdc, win_rect.left, win_rect.top, win_rect.right, win_rect.bottom);
+    message.Format(_T("This window\nW: %d\nH: %d"), win_rect.Width(), win_rect.Height());
+    DrawText(hdc, message.GetString(), message.GetLength(), &win_rect, DT_LEFT | DT_TOP);
 
-	EndPaint(hwnd, &ps);
-	return 0;
+    DeleteObject(b);
+    EndPaint(hwnd, &ps);
+    return 0;
+}
+
+void HandleWinMoved(HWND hwnd)
+{
+    CRect r;
+    BOOL ok = GetWindowRect(hwnd, &r);
+    if (ok == TRUE)
+    {
+        central.win_pos = DisplayRect(r);
+        InvalidateRect(hwnd, NULL, FALSE);
+    }
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
+    case WM_CREATE:
+        // grab the initial size
+        HandleWinMoved(hwnd);
+        break; // fall through
 	case WM_ERASEBKGND:
 		return 1;
 	case WM_DESTROY:
@@ -246,12 +277,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         break; // fall through
     case WM_DISPLAYCHANGE:
     case WM_SETTINGCHANGE: // e.g. hide/show taskbar
+        HandleWinMoved(hwnd); // this happens when primary monitor is changed
         central.invalidate(hwnd);
         break; // fall through
-    case WM_WINDOWPOSCHANGED:
-        //HandleNeedRefresh(hwnd);
+    case WM_WINDOWPOSCHANGED: 
         central.checkMonitorChange(hwnd);
-        return 0;
+        //return 0;
+        break; // fall through
+    case WM_SYSCOMMAND: // for maximise.
+    case WM_EXITSIZEMOVE: // only capture END of window move to avoid flicker.
+        HandleWinMoved(hwnd);
+        break;
 	}
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
