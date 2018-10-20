@@ -15,6 +15,7 @@ struct GlobalState
     int refresh_count;
     HMONITOR most_recent_hmon;
     DisplayRect win_pos;
+    HFONT font = nullptr;
 
     GlobalState()
         : need_refresh(true)
@@ -63,6 +64,32 @@ CRect scale_rect(double scale, int left, int top, const DisplayRect & src, const
     return CRect(pt, sz);
 }
 
+HFONT get_system_font()
+{
+    // Get the system message box font
+    NONCLIENTMETRICS ncm;
+    ncm.cbSize = sizeof(ncm);
+
+/*
+    // If we're compiling with the Vista SDK or later, the NONCLIENTMETRICS struct
+    // will be the wrong size for previous versions, so we need to adjust it.
+#if(_MSC_VER >= 1500 && WINVER >= 0x0600)
+    if (!SystemInfo::IsVistaOrLater())
+    {
+        // In versions of Windows prior to Vista, the iPaddedBorderWidth member
+        // is not present, so we need to subtract its size from cbSize.
+        ncm.cbSize -= sizeof(ncm.iPaddedBorderWidth);
+    }
+#endif
+*/
+    SystemParametersInfo(SPI_GETNONCLIENTMETRICS, ncm.cbSize, &ncm, 0);
+    HFONT hDlgFont = CreateFontIndirect(&(ncm.lfMessageFont));
+
+    // Set the dialog to use the system message box font
+    //SetFont(m_DlgFont, TRUE);
+    //SendMessage(hWnd, WM_SETFONT, (WPARAM)hDlgFont, MAKELPARAM(FALSE, 0));
+    return hDlgFont; // not going to free it. Hopefully that's ok.
+}
 GlobalState central;
 
 int wmain()
@@ -124,6 +151,7 @@ LRESULT HandlePaint(HWND hwnd)
 {
 	PAINTSTRUCT ps;
 	auto hdc = BeginPaint(hwnd, &ps);
+    HFONT origFont = (HFONT)SelectObject(hdc, central.font); // TODO: should check result
 	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW));
     CRect textRect(ps.rcPaint);
     CString message = L"Display info";
@@ -134,7 +162,8 @@ LRESULT HandlePaint(HWND hwnd)
     {
         central.refresh(hwnd);
     }
-    int offset = (int)central.this_display.px_for_mm(2);
+    int pixelInset = -3; // number of pixels to inset text
+    int offset = (int)central.this_display.px_for_mm(2); // pixels, but calculated from mm
     int px_per_in = (int)central.this_display.px_for_inch(1.0);
     int px_per_cm = (int)central.this_display.px_for_mm(10.0);
     CRect inch(0, 0, px_per_in, px_per_in);
@@ -146,7 +175,7 @@ LRESULT HandlePaint(HWND hwnd)
     Rectangle(hdc, cm.left, cm.top, cm.right, cm.bottom);
 
     int right_of_measures = inch.right + offset;
-
+    
     SetBkMode(hdc, TRANSPARENT);
     //SetTextColor(hdc, RGB(0, 255, 0));
     SetTextColor(hdc, RGB(80, 80, 80));
@@ -225,6 +254,7 @@ LRESULT HandlePaint(HWND hwnd)
             (d.is_active ? _T("Active") : _T("Inactive")),
             d.px_per_mm
         );
+        mon_rect.InflateRect(pixelInset, pixelInset);
         DrawText(hdc, message.GetString(), message.GetLength(), &mon_rect, DT_LEFT | DT_TOP);
         //left = mon_rect.right;
     }
@@ -237,8 +267,10 @@ LRESULT HandlePaint(HWND hwnd)
     FillRect(hdc, &win_rect, b);
     //Rectangle(hdc, win_rect.left, win_rect.top, win_rect.right, win_rect.bottom);
     message.Format(_T("This window\nW: %d\nH: %d"), central.win_pos.width(), central.win_pos.height());
+    win_rect.InflateRect(pixelInset, pixelInset);
     DrawText(hdc, message.GetString(), message.GetLength(), &win_rect, DT_LEFT | DT_TOP);
-
+    
+    SelectObject(hdc, origFont); // Restore the original font
     DeleteObject(b);
     EndPaint(hwnd, &ps);
     return 0;
