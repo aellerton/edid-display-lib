@@ -92,6 +92,7 @@ struct DisplayInfo
     DisplaySize physical_mm;
     double px_per_mm;
     double mm_per_px;
+    //unsigned short orientation; // default=0, 90=1, 180=2, 270=3
 
     DisplayInfo()
         : seq(0)

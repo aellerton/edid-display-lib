@@ -116,7 +116,7 @@ DisplayEnquiryCode DisplayFromHMonitor(HMONITOR hMonitor, DisplayInfo & info)
     }
 
     CString DeviceID;
-    DeviceID.Format(_T("%s"), ddMon.DeviceID);
+    DeviceID.Format(_T("%s"), ddMon.DeviceID); // TODO: fix this text encoding issue
     DeviceID = Get2ndSlashBlock(DeviceID);
 
     short WidthMm = -1, HeightMm = -1;
@@ -126,12 +126,27 @@ DisplayEnquiryCode DisplayFromHMonitor(HMONITOR hMonitor, DisplayInfo & info)
         return DISPLAY_ENQUIRY_SIZE_NOT_FOUND;
     }
 
-    CT2A deviceName(mi.szDevice);
+    CT2A deviceName(mi.szDevice); // TODO: check text encoding
     CT2A deviceId(ddMon.DeviceID);
     CT2A deviceStr(ddMon.DeviceString);
 
+    // The API to retrieve whether display is rotated is confusing.
+    // EnumDisplaySettings and dmDisplayOrientation ... maybe.
+    // Doesn't work at a quick attempt. Instead, validate that the physical landscape
+    // (as determined by width/height aspect ratio) is the same as pixels.
+    bool hardwareInLandscape = ((WidthMm / (float)HeightMm)) > 1.0;
+    bool pixelsInLandscape = ((mi.rcMonitor.right - mi.rcMonitor.left) / ((float)mi.rcMonitor.bottom - mi.rcMonitor.top)) > 1.0;
+    if (hardwareInLandscape != pixelsInLandscape) {
+        // hardware is rotated 90 (or 270) so swap physical width and height
+        short tmp = HeightMm;
+        HeightMm = WidthMm;
+        WidthMm = tmp;
+    }
+
+
+    // aspect
+
     info.seq = 0; // fill in later
-    
     info.name = deviceName; // TODO: is this ok or need conversion or CT2A?
     info.device_name = deviceId;
     info.device_str = deviceStr;
@@ -173,13 +188,10 @@ BOOL DisplayDeviceFromHMonitor( HMONITOR hMonitor, DISPLAY_DEVICE &ddMonOut ) {
         
         while( EnumDisplayDevices( dd.DeviceName, MonIdx, &ddMon, 0 ) ) {
         
-            MonIdx++;
+            MonIdx++; // TODO: why increment this here? Why provide it at all?
             
             ddMonOut = ddMon;
-            return TRUE;
-            
-            ZeroMemory( &ddMon, sizeof( ddMon ) );
-            ddMon.cb = sizeof( ddMon );
+            return TRUE; // found the device
         }
         
         ZeroMemory( &dd, sizeof( dd ) );
@@ -230,13 +242,9 @@ bool GetSizeForDevID( const CString &TargetDevID, short &WidthMm, short &HeightM
             }
             
             bRes = GetMonitorSizeFromEDID( hEDIDRegKey, WidthMm, HeightMm );
-            
             RegCloseKey( hEDIDRegKey );
-            
         }
-        
     }
-    
     SetupDiDestroyDeviceInfoList( devInfo );
     return bRes;
 }
