@@ -101,58 +101,61 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 {
     CPoint pt(CW_USEDEFAULT, CW_USEDEFAULT);
     CPoint sz(CW_USEDEFAULT, CW_USEDEFAULT);
-	WNDCLASSEX wc = { 0 };
-	wc.hInstance = hInstance;
-	wc.lpszClassName = L"DisplayInfoMain";
-	wc.cbSize = sizeof(WNDCLASSEX);
-	wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpfnWndProc = WindowProc;
-	auto regRes = RegisterClassEx(&wc);
-	if (!regRes)
-	{
-		//std::cerr << "window registration failed" << std::endl;
-		return regRes;
-	}
+    WNDCLASSEX wc = { 0 };
+    wc.hInstance = hInstance;
+    wc.lpszClassName = L"DisplayInfoMain";
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = WindowProc;
+    auto regRes = RegisterClassEx(&wc);
+    if (!regRes)
+    {
+        //std::cerr << "window registration failed" << std::endl;
+        return regRes;
+    }
+
+    central.font = get_system_font();
 
     // Window size... ought to make this smarter
     sz.x = 800;
     sz.y = 300;
 
-	auto hwnd = CreateWindowEx(0, wc.lpszClassName, L"Display Info", WS_OVERLAPPEDWINDOW, 
+    auto hwnd = CreateWindowEx(0, wc.lpszClassName, L"Display Info", WS_OVERLAPPEDWINDOW,
         pt.x, pt.y, sz.x, sz.y,
         nullptr, nullptr, hInstance, nullptr);
-	if (hwnd == nullptr)
-	{
-		//std::cerr << "window couldn't be created" << std::endl;
-		return -1;
-	}
+    if (hwnd == nullptr)
+    {
+        //std::cerr << "window couldn't be created" << std::endl;
+        return -1;
+    }
 
     //SetThreadDpiAwarenessContext(
-	ShowWindow(hwnd, SW_SHOWNORMAL);
+    ShowWindow(hwnd, SW_SHOWNORMAL);
 
-	MSG msg = {};
-	while (GetMessage(&msg, nullptr, 0, 0))
-	{
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
-	return 0;
+    MSG msg = {};
+    while (GetMessage(&msg, nullptr, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    // TODO: supposed to use wparam of WM_QUIT as exit code
+    return 0;
 }
 
 LRESULT HandleDestroy(HWND hWnd)
 {
-	PostQuitMessage(0);
-	return 0;
+    PostQuitMessage(3);
+    return 0;
 }
 
 LRESULT HandlePaint(HWND hwnd)
 {
-	PAINTSTRUCT ps;
-	auto hdc = BeginPaint(hwnd, &ps);
+    PAINTSTRUCT ps;
+    auto hdc = BeginPaint(hwnd, &ps);
     HFONT origFont = (HFONT)SelectObject(hdc, central.font); // TODO: should check result
-	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW));
+    FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW));
     CRect textRect(ps.rcPaint);
     CString message = L"Display info";
     int height, left, top;
@@ -289,19 +292,19 @@ void HandleWinMoved(HWND hwnd)
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	switch (uMsg)
-	{
+    switch (uMsg)
+    {
     case WM_CREATE:
         // grab the initial size
         HandleWinMoved(hwnd);
         break; // fall through
-	case WM_ERASEBKGND:
-		return 1;
-	case WM_DESTROY:
-		return HandleDestroy(hwnd);
-	case WM_PAINT:
-		return HandlePaint(hwnd);
-    case WM_DPICHANGED: 
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_DESTROY:
+        return HandleDestroy(hwnd);
+    case WM_PAINT:
+        return HandlePaint(hwnd);
+    case WM_DPICHANGED:
         // not sure if this is different to other handlers
         // https://docs.microsoft.com/en-us/windows/desktop/hidpi/wm-dpichanged
         //HandleNeedRefresh(hwnd);
@@ -312,7 +315,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         HandleWinMoved(hwnd); // this happens when primary monitor is changed
         central.invalidate(hwnd);
         break; // fall through
-    case WM_WINDOWPOSCHANGED: 
+    case WM_WINDOWPOSCHANGED:
         HandleWinMoved(hwnd); // flcker?
         central.checkMonitorChange(hwnd);
         //return 0;
@@ -321,6 +324,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_EXITSIZEMOVE: // only capture END of window move to avoid flicker.
         HandleWinMoved(hwnd);
         break;
-	}
-	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    }
+    return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
